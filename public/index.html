@@ -104,6 +104,7 @@
 
     let socket = null;
     let selectedUsername = "";
+    let currentUsername = "";
 
     function showStatus(id, message) {
       $(id).textContent = message;
@@ -148,6 +149,7 @@
       $("auth").classList.add("hidden");
       $("chat").classList.remove("hidden");
       $("myName").textContent = username;
+      currentUsername = username;
       showStatus("authStatus", "");
 
       if (socket) socket.disconnect();
@@ -203,12 +205,25 @@
       }
     }
 
-    function selectUser(username) {
+    async function selectUser(username) {
       selectedUsername = username;
       $("selectedUser").textContent = username;
       $("messages").replaceChildren();
-      showStatus("chatStatus", "Private chat selected with " + username + ".");
+      showStatus("chatStatus", "Loading chat history...");
       $("messageInput").focus();
+
+      try {
+        const data = await api("/messages?with=" + encodeURIComponent(username));
+        if (selectedUsername !== username) return;
+
+        data.messages.forEach((message) => {
+          addMessage(message, message.from === currentUsername);
+        });
+
+        showStatus("chatStatus", "Chat history loaded.");
+      } catch (error) {
+        showStatus("chatStatus", "Could not load history: " + error.message);
+      }
     }
 
     function addMessage(message, mine) {

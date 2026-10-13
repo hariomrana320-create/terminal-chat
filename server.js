@@ -148,6 +148,51 @@ app.get("/users", (req, res) => {
   res.json({ users });
 });
 
+app.get("/messages", (req, res) => {
+  if (!req.session.userId) {
+    return res.status(401).json({ error: "Please login." });
+  }
+
+  const otherUsername = String(req.query.with || "").trim();
+
+  const otherUser = db.prepare(
+    "SELECT id FROM users WHERE username = ?"
+  ).get(otherUsername);
+
+  if (!otherUser) {
+    return res.status(404).json({ error: "User not found." });
+  }
+
+  const messages = db.prepare(`
+    SELECT
+      sender.username AS sender,
+      receiver.username AS receiver,
+      messages.message_text AS text,
+      messages.created_at AS created_at
+    FROM messages
+    JOIN users AS sender ON sender.id = messages.sender_id
+    JOIN users AS receiver ON receiver.id = messages.receiver_id
+    WHERE
+      (messages.sender_id = ? AND messages.receiver_id = ?)
+      OR
+      (messages.sender_id = ? AND messages.receiver_id = ?)
+    ORDER BY messages.id ASC
+    LIMIT 500
+  `).all(
+    req.session.userId, otherUser.id,
+    otherUser.id, req.session.userId
+  );
+
+  res.json({
+    messages: messages.map(m => ({
+      from: m.sender,
+      to: m.receiver,
+      text: m.text,
+      createdAt: m.created_at
+    }))
+  });
+});
+
 app.post("/logout", (req, res) => {
   req.session.destroy((err) => {
     if (err) {
@@ -195,17 +240,33 @@ io.on("connection", (socket) => {
       return;
     }
 
-    const recipientSockets = onlineUsers.get(to);
+    const recipient = db.prepare(
+      "SELECT id FROM users WHERE username = ?"
+    ).get(to);
 
-    if (!recipientSockets || recipientSockets.size === 0) {
-      socket.emit("private message error", to + " is not online.");
+    if (!recipient) {
+      socket.emit("private message error", "User not found.");
       return;
     }
 
-    const message = { from: username, to, text };
+    const result = db.prepare(`
+      INSERT INTO messages (sender_id, receiver_id, message_text)
+      VALUES (?, ?, ?)
+    `).run(userSession.userId, recipient.id, text);
 
-    for (const socketId of recipientSockets) {
-      io.to(socketId).emit("private message", message);
+    const message = {
+      id: result.lastInsertRowid,
+      from: username,
+      to,
+      text
+    };
+
+    const recipientSockets = onlineUsers.get(to);
+
+    if (recipientSockets && recipientSockets.size > 0) {
+      for (const socketId of recipientSockets) {
+        io.to(socketId).emit("private message", message);
+      }
     }
 
     socket.emit("private message sent", message);
