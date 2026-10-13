@@ -1,0 +1,294 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Terminal Chat - Private Messaging</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      background: #101820;
+      color: #e8f5e9;
+      font-family: monospace;
+    }
+    .container {
+      max-width: 650px;
+      margin: 20px auto;
+      padding: 20px;
+      border: 1px solid #36d17c;
+      border-radius: 10px;
+    }
+    h1, h2 { color: #36d17c; }
+    input, button {
+      box-sizing: border-box;
+      padding: 11px;
+      margin: 5px 0;
+      font-family: monospace;
+      font-size: 15px;
+    }
+    input { width: 100%; }
+    button {
+      cursor: pointer;
+      background: #36d17c;
+      border: 0;
+      color: #101820;
+      font-weight: bold;
+    }
+    .hidden { display: none; }
+    .status { color: #ffd166; min-height: 20px; }
+    #messages {
+      height: 250px;
+      overflow-y: auto;
+      border: 1px solid #42634f;
+      padding: 10px;
+      margin: 12px 0;
+      overflow-wrap: anywhere;
+    }
+    .message { margin: 10px 0; }
+    .mine { color: #7dd3fc; }
+    .theirs { color: #a7f3d0; }
+    #results button {
+      display: block;
+      width: 100%;
+      text-align: left;
+      background: #263b32;
+      color: white;
+      border: 1px solid #36d17c;
+    }
+    .row { display: flex; gap: 8px; }
+    .row input { flex: 1; min-width: 0; }
+    .row button { flex-shrink: 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Terminal Chat</h1>
+    <p>Private messaging for registered users</p>
+
+    <section id="auth">
+      <h2>Sign Up / Login</h2>
+      <input id="username" placeholder="Username (3-20 characters)" autocomplete="username">
+      <input id="password" type="password" placeholder="Password (minimum 8 characters)" autocomplete="current-password">
+      <div class="row">
+        <button id="signupBtn">Sign Up</button>
+        <button id="loginBtn">Login</button>
+      </div>
+      <p id="authStatus" class="status"></p>
+    </section>
+
+    <section id="chat" class="hidden">
+      <p>Logged in as: <strong id="myName"></strong></p>
+      <button id="logoutBtn">Logout</button>
+
+      <h2>Find a User</h2>
+      <input id="search" placeholder="Type username to search">
+      <div id="results"></div>
+      <p id="searchStatus" class="status"></p>
+
+      <h2>Private Chat</h2>
+      <p>Chatting with: <strong id="selectedUser">None selected</strong></p>
+      <div id="messages" aria-live="polite"></div>
+      <div class="row">
+        <input id="messageInput" placeholder="Write a private message..." maxlength="1000">
+        <button id="sendBtn">Send</button>
+      </div>
+      <p id="chatStatus" class="status"></p>
+    </section>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    let socket = null;
+    let selectedUsername = "";
+
+    function showStatus(id, message) {
+      $(id).textContent = message;
+    }
+
+    async function api(url, options = {}) {
+      const response = await fetch(url, {
+        credentials: "same-origin",
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          ...(options.headers || {})
+        }
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Request failed.");
+      }
+
+      return data;
+    }
+
+    async function signupOrLogin(action) {
+      const username = $("username").value.trim();
+      const password = $("password").value;
+
+      try {
+        const data = await api("/" + action, {
+          method: "POST",
+          body: JSON.stringify({ username, password })
+        });
+
+        await enterChat(data.username);
+      } catch (error) {
+        showStatus("authStatus", error.message);
+      }
+    }
+
+    async function enterChat(username) {
+      $("auth").classList.add("hidden");
+      $("chat").classList.remove("hidden");
+      $("myName").textContent = username;
+      showStatus("authStatus", "");
+
+      if (socket) socket.disconnect();
+
+      socket = io();
+
+      socket.on("connect", () => {
+        showStatus("chatStatus", "Connected. Select a user to start chatting.");
+      });
+
+      socket.on("connect_error", (error) => {
+        showStatus("chatStatus", error.message || "Connection failed.");
+      });
+
+      socket.on("private message", (message) => {
+        addMessage(message, false);
+      });
+
+      socket.on("private message sent", (message) => {
+        addMessage(message, true);
+      });
+
+      socket.on("private message error", (message) => {
+        showStatus("chatStatus", message);
+      });
+    }
+
+    async function searchUsers() {
+      const search = $("search").value.trim();
+      $("results").replaceChildren();
+
+      if (!search) {
+        showStatus("searchStatus", "Type a username to search.");
+        return;
+      }
+
+      try {
+        const data = await api("/users?search=" + encodeURIComponent(search));
+        if (data.users.length === 0) {
+          showStatus("searchStatus", "No matching users found.");
+          return;
+        }
+
+        showStatus("searchStatus", "Choose a user:");
+        data.users.forEach((username) => {
+          const button = document.createElement("button");
+          button.textContent = username.username;
+          button.addEventListener("click", () => selectUser(username.username));
+          $("results").appendChild(button);
+        });
+      } catch (error) {
+        showStatus("searchStatus", error.message);
+      }
+    }
+
+    function selectUser(username) {
+      selectedUsername = username;
+      $("selectedUser").textContent = username;
+      $("messages").replaceChildren();
+      showStatus("chatStatus", "Private chat selected with " + username + ".");
+      $("messageInput").focus();
+    }
+
+    function addMessage(message, mine) {
+      if (
+        message.from !== selectedUsername &&
+        message.to !== selectedUsername
+      ) {
+        return;
+      }
+
+      const item = document.createElement("div");
+      item.className = "message " + (mine ? "mine" : "theirs");
+
+      const sender = document.createElement("strong");
+      sender.textContent = mine ? "You: " : message.from + ": ";
+
+      const text = document.createElement("span");
+      text.textContent = message.text;
+
+      item.append(sender, text);
+      $("messages").appendChild(item);
+      $("messages").scrollTop = $("messages").scrollHeight;
+    }
+
+    function sendMessage() {
+      const text = $("messageInput").value.trim();
+
+      if (!socket || !socket.connected) {
+        showStatus("chatStatus", "Not connected. Please wait or login again.");
+        return;
+      }
+
+      if (!selectedUsername) {
+        showStatus("chatStatus", "First search and select a user.");
+        return;
+      }
+
+      if (!text) return;
+
+      socket.emit("private message", {
+        to: selectedUsername,
+        text
+      });
+
+      $("messageInput").value = "";
+      showStatus("chatStatus", "Sending message...");
+    }
+
+    async function logout() {
+      try {
+        if (socket) socket.disconnect();
+        await api("/logout", { method: "POST", body: "{}" });
+
+        $("chat").classList.add("hidden");
+        $("auth").classList.remove("hidden");
+        $("password").value = "";
+        $("messages").replaceChildren();
+        $("results").replaceChildren();
+        $("search").value = "";
+        selectedUsername = "";
+        $("selectedUser").textContent = "None selected";
+        showStatus("authStatus", "Logged out.");
+      } catch (error) {
+        showStatus("chatStatus", error.message);
+      }
+    }
+
+    $("signupBtn").addEventListener("click", () => signupOrLogin("signup"));
+    $("loginBtn").addEventListener("click", () => signupOrLogin("login"));
+    $("search").addEventListener("input", searchUsers);
+    $("sendBtn").addEventListener("click", sendMessage);
+    $("messageInput").addEventListener("keydown", (event) => {
+      if (event.key === "Enter") sendMessage();
+    });
+    $("logoutBtn").addEventListener("click", logout);
+
+    api("/me")
+      .then((data) => enterChat(data.username))
+      .catch(() => {});
+  </script>
+</body>
+</html>
+
