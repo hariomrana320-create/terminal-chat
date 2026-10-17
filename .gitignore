@@ -1,3 +1,16 @@
 node_modules/
 chat.db
 .env
+
+.env.local
+
+# Local configuration and backup files
+.neon
+.agents/
+skills-lock.json
+*.backup
+server.js.before-postgres
+database.js.sqlite-backup
+server.js.pg-backup
+
+server.js.sqlite-backup
