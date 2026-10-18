@@ -341,13 +341,13 @@
       <div id="avatarPicker" class="hidden" aria-label="Choose profile picture"></div>
       <div id="chatWorkspace">
         <div id="discovery">
-          <h2>Recent Chats</h2>
-          <div id="recentChats"></div>
-          <p id="recentStatus" class="status"></p>
           <h2>Find a User</h2>
           <input id="search" placeholder="Search username" autocomplete="off">
           <div id="results"></div>
           <p id="searchStatus" class="status"></p>
+          <h2>Recent Chats</h2>
+          <div id="recentChats"></div>
+          <p id="recentStatus" class="status"></p>
         </div>
         <div id="conversation">
           <div class="conversation-header">
@@ -365,6 +365,7 @@
             <div id="callStatus">Voice call</div>
             <button id="acceptCallBtn" class="hidden" type="button">Accept</button>
             <button id="rejectCallBtn" class="hidden call-danger" type="button">Reject</button>
+            <button id="speakerCallBtn" class="hidden" type="button">Speaker</button>
             <button id="muteCallBtn" class="hidden" type="button">Mute</button>
             <button id="endCallBtn" class="hidden call-danger" type="button">Hang up</button>
             <audio id="remoteAudio" autoplay playsinline></audio>
@@ -382,6 +383,11 @@
 
   <script>
     const $ = (id) => document.getElementById(id);
+
+    const CallAudio = window.Capacitor?.registerPlugin
+      ? window.Capacitor.registerPlugin("CallAudio")
+      : null;
+    let isSpeakerOn = false;
 
     let socket = null;
     let selectedUsername = "";
@@ -429,7 +435,7 @@
     }
 
     function avatarUrl(id) {
-      const safe = /^avatar-(0[1-9]|1[0-5])$/.test(id || "") ? id : "avatar-01";
+      const safe = /^avatar-(0[1-9]|10)$/.test(id || "") ? id : "avatar-01";
       return "/avatars/" + safe + ".svg";
     }
 
@@ -678,7 +684,7 @@
     function renderAvatarPicker() {
       const picker = $("avatarPicker");
       picker.replaceChildren();
-      for (let i = 1; i <= 15; i++) {
+      for (let i = 1; i <= 10; i++) {
         const id = "avatar-" + String(i).padStart(2, "0");
         const button = document.createElement("button");
         button.type = "button";
@@ -705,6 +711,50 @@
       }
     }
 
+    let ringtoneContext = null;
+    let ringtoneTimer = null;
+    let callTimeoutTimer = null;
+
+    function playRingtone() {
+      stopRingtone();
+      try {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return;
+        ringtoneContext = new AudioContextClass();
+
+        const ringOnce = () => {
+          if (!ringtoneContext || ringtoneContext.state === "closed") return;
+          const oscillator = ringtoneContext.createOscillator();
+          const gain = ringtoneContext.createGain();
+          oscillator.type = "sine";
+          oscillator.frequency.value = 880;
+          gain.gain.value = 0.12;
+          oscillator.connect(gain);
+          gain.connect(ringtoneContext.destination);
+          oscillator.start();
+          oscillator.stop(ringtoneContext.currentTime + 0.35);
+        };
+
+        ringtoneContext.resume().then(() => {
+          ringOnce();
+          ringtoneTimer = setInterval(ringOnce, 1200);
+        }).catch(() => {});
+      } catch (error) {
+        console.warn("Ringtone error:", error);
+      }
+    }
+
+    function stopRingtone() {
+      if (ringtoneTimer) {
+        clearInterval(ringtoneTimer);
+        ringtoneTimer = null;
+      }
+      if (ringtoneContext) {
+        ringtoneContext.close().catch(() => {});
+        ringtoneContext = null;
+      }
+    }
+
     function showCallPanel(status) {
       $("callPanel").classList.remove("hidden");
       $("callStatus").textContent = status;
@@ -712,7 +762,7 @@
 
     function hideCallPanel() {
       $("callPanel").classList.add("hidden");
-      ["acceptCallBtn","rejectCallBtn","muteCallBtn","endCallBtn"].forEach(id => $(id).classList.add("hidden"));
+      ["acceptCallBtn","rejectCallBtn","speakerCallBtn","muteCallBtn","endCallBtn"].forEach(id => $(id).classList.add("hidden"));
     }
 
     function closePeerConnection() {
@@ -732,10 +782,15 @@
     }
 
     function stopVoiceCall(notify = true) {
+      stopRingtone();
+      if (callTimeoutTimer) { clearTimeout(callTimeoutTimer); callTimeoutTimer = null; }
       if (notify && activeCall && socket && socket.connected) {
         socket.emit("call:end", {to:activeCall.peer, callId:activeCall.callId});
       }
       closePeerConnection();
+      isSpeakerOn = false;
+      if (CallAudio) CallAudio.resetAudio().catch(error => console.warn("Audio reset failed:", error));
+      $("speakerCallBtn").textContent = "Speaker";
       activeCall = null;
       pendingOffer = null;
       hideCallPanel();
@@ -778,7 +833,14 @@
       if (activeCall) return;
       const callId = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random());
       activeCall = {peer:selectedUsername, callId, role:"caller"};
+      callTimeoutTimer = setTimeout(() => {
+        if (activeCall && activeCall.callId === callId && activeCall.role === "caller") {
+          stopVoiceCall(true);
+          showStatus("chatStatus", "No answer. Call ended after 45 seconds.");
+        }
+      }, 45000);
       showCallPanel("Calling " + selectedUsername + "…");
+      playRingtone();
       $("endCallBtn").classList.remove("hidden");
       try {
         await preparePeerConnection(selectedUsername, callId);
@@ -792,6 +854,8 @@
     }
 
     async function acceptIncomingCall() {
+      stopRingtone();
+      if (callTimeoutTimer) { clearTimeout(callTimeoutTimer); callTimeoutTimer = null; }
       if (!pendingOffer || !socket) return;
       const call = pendingOffer;
       activeCall = {peer:call.from, callId:call.callId, role:"callee"};
@@ -804,6 +868,7 @@
         socket.emit("call:answer", {to:activeCall.peer, callId:activeCall.callId, answer:peerConnection.localDescription});
         $("acceptCallBtn").classList.add("hidden");
         $("rejectCallBtn").classList.add("hidden");
+        $("speakerCallBtn").classList.remove("hidden");
         $("muteCallBtn").classList.remove("hidden");
         $("endCallBtn").classList.remove("hidden");
         showCallPanel("In call with " + activeCall.peer);
@@ -820,12 +885,25 @@
           return;
         }
         pendingOffer = data;
+        playRingtone();
+        callTimeoutTimer = setTimeout(() => {
+          if (pendingOffer && pendingOffer.callId === data.callId) {
+            socket.emit("call:reject", {to:data.from, callId:data.callId});
+            pendingOffer = null;
+            stopRingtone();
+            hideCallPanel();
+            callTimeoutTimer = null;
+            showStatus("chatStatus", "Missed call from " + data.from + ".");
+          }
+        }, 45000);
         showCallPanel("Incoming voice call from " + data.from);
         $("acceptCallBtn").classList.remove("hidden");
         $("rejectCallBtn").classList.remove("hidden");
         $("acceptCallBtn").onclick = acceptIncomingCall;
         $("rejectCallBtn").onclick = () => {
           socket.emit("call:reject", {to:data.from, callId:data.callId});
+          if (callTimeoutTimer) { clearTimeout(callTimeoutTimer); callTimeoutTimer = null; }
+          stopRingtone();
           pendingOffer = null;
           hideCallPanel();
         };
@@ -834,7 +912,10 @@
         if (!activeCall || data.callId !== activeCall.callId || !data.answer || !peerConnection) return;
         try {
           await peerConnection.setRemoteDescription(data.answer);
+          if (callTimeoutTimer) { clearTimeout(callTimeoutTimer); callTimeoutTimer = null; }
+          stopRingtone();
           showCallPanel("In call with " + data.from);
+          $("speakerCallBtn").classList.remove("hidden");
           $("muteCallBtn").classList.remove("hidden");
           $("endCallBtn").classList.remove("hidden");
         } catch (error) {
@@ -849,6 +930,18 @@
       socket.on("call:end", data => {
         if (activeCall && data.callId === activeCall.callId) {
           stopVoiceCall(false);
+          showStatus("chatStatus", "Call ended by " + data.from + ".");
+          return;
+        }
+
+        if (pendingOffer && data.callId === pendingOffer.callId) {
+          if (callTimeoutTimer) {
+            clearTimeout(callTimeoutTimer);
+            callTimeoutTimer = null;
+          }
+          stopRingtone();
+          pendingOffer = null;
+          hideCallPanel();
           showStatus("chatStatus", "Call ended by " + data.from + ".");
         }
       });
@@ -870,6 +963,22 @@
     $("backBtn").addEventListener("click", () => document.body.classList.remove("conversation-mode"));
     $("callBtn").addEventListener("click", startVoiceCall);
     $("endCallBtn").addEventListener("click", () => stopVoiceCall(true));
+    $("speakerCallBtn").addEventListener("click", async () => {
+      if (!CallAudio) {
+        showStatus("callStatus", "Speaker control is available only in the Android app.");
+        return;
+      }
+      try {
+        const nextState = !isSpeakerOn;
+        await CallAudio.setSpeaker({ enabled: nextState });
+        isSpeakerOn = nextState;
+        $("speakerCallBtn").textContent = isSpeakerOn ? "Use Earpiece" : "Speaker";
+        showStatus("callStatus", isSpeakerOn ? "Speaker is on" : "Earpiece is on");
+      } catch (error) {
+        showStatus("callStatus", "Could not change audio: " + error.message);
+      }
+    });
+
     $("muteCallBtn").addEventListener("click", () => {
       if (!localStream) return;
       isMuted = !isMuted;

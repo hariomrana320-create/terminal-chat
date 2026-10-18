@@ -1,0 +1,9 @@
+{
+  "appId": "com.terminalchat.app",
+  "appName": "Terminal Chat",
+  "webDir": "public",
+  "server": {
+    "url": "https://terminal-chat-nprn.onrender.com",
+    "cleartext": false
+  }
+}
