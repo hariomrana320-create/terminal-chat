@@ -7,60 +7,187 @@
   <title>Terminal Chat - Private Messaging</title>
   <script src="/socket.io/socket.io.js"></script>
   <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101410;
+      --panel: #191f1a;
+      --panel-light: #222b23;
+      --green: #36d399;
+      --green-hover: #5ee6ae;
+      --text: #e8f1e9;
+      --muted: #a2b2a5;
+      --border: #354638;
+      --danger: #ffb4ab;
+    }
+
+    * { box-sizing: border-box; }
+
     body {
       margin: 0;
-      padding: 20px;
-      background: #101820;
-      color: #e8f5e9;
-      font-family: monospace;
+      padding: 20px 14px;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, sans-serif;
+      line-height: 1.5;
     }
+
     .container {
-      max-width: 650px;
-      margin: 20px auto;
-      padding: 20px;
-      border: 1px solid #36d17c;
-      border-radius: 10px;
+      width: 100%;
+      max-width: 620px;
+      margin: 24px auto;
+      padding: 24px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      box-shadow: 0 16px 45px #00000035;
     }
-    h1, h2 { color: #36d17c; }
+
+    h1 {
+      margin: 0 0 6px;
+      color: var(--green);
+      font-size: clamp(27px, 6vw, 35px);
+      letter-spacing: -1px;
+    }
+
+    h2 {
+      margin: 24px 0 12px;
+      color: var(--green);
+      font-size: 18px;
+    }
+
+    p { color: var(--muted); }
+    strong { color: var(--text); }
+
     input, button {
-      box-sizing: border-box;
-      padding: 11px;
-      margin: 5px 0;
-      font-family: monospace;
-      font-size: 15px;
+      width: 100%;
+      min-height: 46px;
+      margin: 6px 0;
+      padding: 12px 14px;
+      border-radius: 11px;
+      font: inherit;
     }
-    input { width: 100%; }
+
+    input {
+      border: 1px solid var(--border);
+      background: #111712;
+      color: var(--text);
+      outline: none;
+    }
+
+    input::placeholder { color: #849487; }
+
+    input:focus {
+      border-color: var(--green);
+      box-shadow: 0 0 0 3px #36d39920;
+    }
+
     button {
+      border: 1px solid transparent;
+      background: var(--green);
+      color: #092016;
+      font-weight: 700;
       cursor: pointer;
-      background: #36d17c;
-      border: 0;
-      color: #101820;
-      font-weight: bold;
+      transition: background .15s, transform .15s;
     }
-    .hidden { display: none; }
-    .status { color: #ffd166; min-height: 20px; }
-    #messages {
-      height: 250px;
-      overflow-y: auto;
-      border: 1px solid #42634f;
-      padding: 10px;
-      margin: 12px 0;
+
+    button:hover { background: var(--green-hover); }
+    button:active { transform: scale(.98); }
+
+    .row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .row input { flex: 1; min-width: 0; }
+    .row button { flex: 0 0 auto; width: auto; min-width: 82px; }
+
+    .hidden { display: none !important; }
+
+    .status {
+      min-height: 20px;
+      color: var(--green);
+      font-size: 13px;
       overflow-wrap: anywhere;
     }
-    .message { margin: 10px 0; }
-    .mine { color: #7dd3fc; }
-    .theirs { color: #a7f3d0; }
+
+    #results { display: grid; gap: 7px; }
+
     #results button {
-      display: block;
       width: 100%;
+      margin: 0;
       text-align: left;
-      background: #263b32;
-      color: white;
-      border: 1px solid #36d17c;
+      background: var(--panel-light);
+      color: var(--text);
+      border-color: var(--border);
     }
-    .row { display: flex; gap: 8px; }
-    .row input { flex: 1; min-width: 0; }
-    .row button { flex-shrink: 0; }
+
+    #results button:hover {
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    #messages {
+      height: min(38vh, 330px);
+      min-height: 180px;
+      overflow-y: auto;
+      overflow-wrap: anywhere;
+      padding: 12px;
+      margin: 12px 0;
+      background: #111712;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+    }
+
+    .message {
+      width: fit-content;
+      max-width: 92%;
+      margin: 9px 0;
+      padding: 9px 12px;
+      border-radius: 12px;
+      background: var(--panel-light);
+      color: var(--text);
+    }
+
+    .mine {
+      margin-left: auto;
+      background: #173d2c;
+      color: #b7f7d7;
+    }
+
+    .theirs {
+      margin-right: auto;
+      background: #252d26;
+      color: var(--text);
+    }
+
+    #logoutBtn {
+      width: auto;
+      min-height: 38px;
+      padding: 8px 14px;
+      background: transparent;
+      color: var(--green);
+      border-color: var(--border);
+    }
+
+    #sendBtn { min-width: 76px; }
+
+    @media (max-width: 480px) {
+      body { padding: 8px; }
+      .container {
+        margin: 8px auto;
+        padding: 17px;
+        border-radius: 16px;
+      }
+      .row { gap: 7px; }
+      .row button { min-width: 70px; padding: 10px; }
+      #messages { height: 38vh; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { transition: none !important; }
+    }
   </style>
 </head>
 <body>
