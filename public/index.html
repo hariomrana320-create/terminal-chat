@@ -112,7 +112,49 @@
       overflow-wrap: anywhere;
     }
 
-    #results { display: grid; gap: 7px; }
+    #results, #recentChats { display: grid; gap: 7px; }
+
+    #recentChats button {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      margin: 0;
+      padding: 12px;
+      text-align: left;
+      background: var(--panel-light);
+      color: var(--text);
+      border-color: var(--border);
+    }
+
+    #recentChats button:hover {
+      border-color: var(--green);
+    }
+
+    .recent-avatar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 42px;
+      height: 42px;
+      border-radius: 50%;
+      background: #244c3c;
+      color: var(--green);
+      font-weight: 800;
+    }
+
+    .recent-details { min-width: 0; flex: 1; }
+    .recent-name { display: block; }
+    .recent-preview {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 400;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
 
     #results button {
       width: 100%;
@@ -210,6 +252,10 @@
       <p>Logged in as: <strong id="myName"></strong></p>
       <button id="logoutBtn">Logout</button>
 
+      <h2>Recent Chats</h2>
+      <div id="recentChats"></div>
+      <p id="recentStatus" class="status"></p>
+
       <h2>Find a User</h2>
       <input id="search" placeholder="Type username to search">
       <div id="results"></div>
@@ -235,6 +281,80 @@
 
     function showStatus(id, message) {
       $(id).textContent = message;
+    }
+
+    function recentStorageKey() {
+      return "terminalChatRecent:" + currentUsername;
+    }
+
+    function getRecentChats() {
+      if (!currentUsername) return [];
+      try {
+        return JSON.parse(localStorage.getItem(recentStorageKey()) || "[]");
+      } catch {
+        return [];
+      }
+    }
+
+    function rememberRecentChat(username, preview) {
+      if (!currentUsername || !username || username === currentUsername) return;
+
+      const chats = getRecentChats();
+      const existing = chats.find(chat => chat.username === username);
+
+      const updated = {
+        username,
+        preview: preview !== undefined ? String(preview) : (existing?.preview || "Tap to open chat"),
+        time: Date.now()
+      };
+
+      const next = [updated, ...chats.filter(chat => chat.username !== username)].slice(0, 50);
+
+      try {
+        localStorage.setItem(recentStorageKey(), JSON.stringify(next));
+      } catch (error) {
+        console.warn("Could not save recent chats:", error);
+      }
+
+      renderRecentChats();
+    }
+
+    function renderRecentChats() {
+      const list = $("recentChats");
+      if (!list) return;
+
+      list.replaceChildren();
+      const chats = getRecentChats();
+
+      if (!chats.length) {
+        showStatus("recentStatus", "Your recent conversations will appear here.");
+        return;
+      }
+
+      showStatus("recentStatus", "");
+
+      chats.forEach(chat => {
+        const button = document.createElement("button");
+        const avatar = document.createElement("span");
+        avatar.className = "recent-avatar";
+        avatar.textContent = chat.username.slice(0, 1).toUpperCase();
+
+        const details = document.createElement("span");
+        details.className = "recent-details";
+
+        const name = document.createElement("span");
+        name.className = "recent-name";
+        name.textContent = chat.username;
+
+        const preview = document.createElement("span");
+        preview.className = "recent-preview";
+        preview.textContent = chat.preview || "Tap to open chat";
+
+        details.append(name, preview);
+        button.append(avatar, details);
+        button.addEventListener("click", () => selectUser(chat.username));
+        list.appendChild(button);
+      });
     }
 
     async function api(url, options = {}) {
@@ -278,6 +398,7 @@
       $("myName").textContent = username;
       currentUsername = username;
       showStatus("authStatus", "");
+      renderRecentChats();
 
       if (socket) socket.disconnect();
 
@@ -292,10 +413,12 @@
       });
 
       socket.on("private message", (message) => {
+        rememberRecentChat(message.from, message.text);
         addMessage(message, false);
       });
 
       socket.on("private message sent", (message) => {
+        rememberRecentChat(message.to || selectedUsername, message.text);
         addMessage(message, true);
       });
 
@@ -334,6 +457,7 @@
 
     async function selectUser(username) {
       selectedUsername = username;
+      rememberRecentChat(username);
       $("selectedUser").textContent = username;
       $("messages").replaceChildren();
       showStatus("chatStatus", "Loading chat history...");
