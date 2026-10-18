@@ -128,12 +128,50 @@ app.post("/login", async (req, res) => {
   }
 });
 
-app.get("/me", (req, res) => {
-  if (!req.session.userId) {
-    return res.status(401).json({ error: "Please login." });
-  }
+app.get("/me", async (req, res) => {
+  try {
+    if (!req.session.userId) {
+      return res.status(401).json({ error: "Please login." });
+    }
 
-  res.json({ username: req.session.username });
+    const result = await db.query(
+      "SELECT username, avatar_id FROM users WHERE id = $1",
+      [req.session.userId]
+    );
+
+    if (!result.rows[0]) {
+      return res.status(401).json({ error: "Please login again." });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error("Profile load error:", error);
+    res.status(500).json({ error: "Could not load profile." });
+  }
+});
+
+app.post("/profile/avatar", async (req, res) => {
+  try {
+    if (!req.session.userId) {
+      return res.status(401).json({ error: "Please login." });
+    }
+
+    const avatarId = String(req.body.avatarId || "");
+
+    if (!/^avatar-(0[1-9]|1[0-5])$/.test(avatarId)) {
+      return res.status(400).json({ error: "Invalid avatar selection." });
+    }
+
+    await db.query(
+      "UPDATE users SET avatar_id = $1 WHERE id = $2",
+      [avatarId, req.session.userId]
+    );
+
+    res.json({ message: "Profile picture saved.", avatarId });
+  } catch (error) {
+    console.error("Avatar update error:", error);
+    res.status(500).json({ error: "Could not save profile picture." });
+  }
 });
 
 app.get("/users", async (req, res) => {
@@ -149,7 +187,7 @@ app.get("/users", async (req, res) => {
     }
 
     const result = await db.query(
-      `SELECT username
+      `SELECT username, avatar_id
        FROM users
        WHERE username ILIKE $1 AND id <> $2
        ORDER BY username
@@ -304,6 +342,41 @@ io.on("connection", (socket) => {
       socket.emit("private message error", "Message could not be sent.");
     }
   });
+
+  function relayCallSignal(incomingEvent, outgoingEvent, field) {
+    socket.on(incomingEvent, (data) => {
+      if (!data || typeof data !== "object") return;
+
+      const to = String(data.to || "").trim();
+      const callId = String(data.callId || "").slice(0, 100);
+
+      if (!/^[a-zA-Z0-9_]{3,20}$/.test(to) || !callId) return;
+
+      const recipientSockets = onlineUsers.get(to);
+
+      if (!recipientSockets || recipientSockets.size === 0) {
+        socket.emit("call:unavailable", { to, callId });
+        return;
+      }
+
+      const payload = { from: username, callId };
+
+      if (field) {
+        if (!data[field] || typeof data[field] !== "object") return;
+        payload[field] = data[field];
+      }
+
+      for (const socketId of recipientSockets) {
+        io.to(socketId).emit(outgoingEvent, payload);
+      }
+    });
+  }
+
+  relayCallSignal("call:offer", "call:offer", "offer");
+  relayCallSignal("call:answer", "call:answer", "answer");
+  relayCallSignal("call:ice-candidate", "call:ice-candidate", "candidate");
+  relayCallSignal("call:end", "call:end", null);
+  relayCallSignal("call:reject", "call:reject", null);
 
   socket.on("disconnect", () => {
     const sockets = onlineUsers.get(username);

@@ -11,6 +11,9 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/cli": "^8.5.3",
+    "@capacitor/core": "^8.5.3",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^13.0.3",
     "connect-pg-simple": "^10.0.0",

@@ -230,6 +230,86 @@
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { transition: none !important; }
     }
+
+    body.chat-mode { padding: 0; }
+    body.chat-mode .container {
+      max-width: none; width: 100%; height: 100dvh; min-height: 0;
+      margin: 0; padding: 0; border: 0; border-radius: 0;
+      box-shadow: none; display: flex; flex-direction: column; overflow: hidden;
+    }
+    body.chat-mode .container > h1,
+    body.chat-mode .container > p { display: none; }
+    #chat { min-height: 0; flex: 1; overflow: hidden; }
+    .profile-bar {
+      display:flex; align-items:center; gap:12px; padding:12px 16px;
+      border-bottom:1px solid var(--border); background:var(--panel);
+    }
+    .profile-bar .profile-info { flex:1; min-width:0; }
+    .profile-bar .profile-info strong { display:block; }
+    .avatar-img { width:44px; height:44px; border-radius:50%; object-fit:cover; flex-shrink:0; }
+    .small-btn { width:auto; min-width:0; min-height:38px; margin:0; padding:7px 12px; }
+    #avatarPicker {
+      padding:12px; border-bottom:1px solid var(--border);
+      display:flex; flex-wrap:wrap; gap:8px; background:var(--panel);
+    }
+    #avatarPicker button { width:54px; min-width:54px; height:54px; min-height:54px; padding:4px; margin:0; }
+    #avatarPicker img { width:42px; height:42px; }
+    #chatWorkspace { display:flex; min-height:0; height:calc(100% - 69px); }
+    #discovery {
+      width:320px; flex-shrink:0; overflow-y:auto; padding:12px;
+      border-right:1px solid var(--border);
+    }
+    #discovery h2 { margin-top:14px; }
+    #conversation { display:flex; flex:1; min-width:0; min-height:0; flex-direction:column; }
+    .conversation-header {
+      display:flex; align-items:center; gap:10px; padding:10px 14px;
+      background:var(--panel); border-bottom:1px solid var(--border);
+    }
+    .conversation-header .person { flex:1; min-width:0; }
+    .conversation-header .person strong { display:block; overflow-wrap:anywhere; }
+    .conversation-actions { display:flex; gap:6px; }
+    .conversation-actions button { width:auto; min-width:40px; min-height:38px; margin:0; padding:7px 10px; }
+    #messages {
+      flex:1; min-height:0; height:auto; margin:0; border:0; border-radius:0;
+      padding:18px; background:#0c1510;
+      background-image:radial-gradient(#25342a 0.7px,transparent 0.7px);
+      background-size:18px 18px;
+    }
+    .message { padding:9px 12px; max-width:min(78%,620px); border-radius:12px; }
+    .message-time { display:block; text-align:right; font-size:11px; opacity:.7; margin-top:4px; }
+    .composer { display:flex; gap:8px; align-items:center; padding:10px 12px; background:var(--panel); }
+    .composer input { flex:1; min-width:0; margin:0; border-radius:22px; }
+    .composer button { width:auto; min-width:66px; margin:0; }
+    #chatStatus { padding:0 12px; margin:0; background:var(--panel); }
+    #callPanel {
+      padding:12px; background:#202c23; border-bottom:1px solid var(--border);
+    }
+    #callPanel button { width:auto; min-height:38px; padding:7px 12px; margin:4px; }
+    #callStatus { color:var(--green); font-size:13px; }
+    .call-danger { background:#b91c1c!important; color:white!important; }
+    .recent-avatar { padding:0; overflow:hidden; }
+    .recent-avatar img { width:100%; height:100%; object-fit:cover; }
+    #results button { display:flex; align-items:center; gap:10px; }
+    #results .avatar-img { width:36px; height:36px; }
+    #backBtn { display:none; }
+    @media(max-width:700px) {
+      body.chat-mode .container { width:100%; }
+      #discovery { width:100%; border:0; }
+      #conversation { width:100%; }
+      body.chat-mode.conversation-mode #discovery { display:none; }
+      body.chat-mode.conversation-mode #conversation { display:flex; }
+      body.chat-mode:not(.conversation-mode) #conversation { display:none; }
+      #backBtn { display:inline-block; }
+      .profile-bar { padding:8px 10px; gap:8px; }
+      .profile-bar .avatar-img { width:38px; height:38px; }
+      .profile-bar .small-btn { padding:6px 8px; }
+      .conversation-header { padding:8px; gap:6px; }
+      .conversation-actions { gap:3px; }
+      .conversation-actions button { padding:6px 8px; min-width:36px; }
+      #messages { padding:12px 8px; }
+      .message { max-width:88%; }
+    }
+
   </style>
 </head>
 <body>
@@ -249,26 +329,54 @@
     </section>
 
     <section id="chat" class="hidden">
-      <p>Logged in as: <strong id="myName"></strong></p>
-      <button id="logoutBtn">Logout</button>
-
-      <h2>Recent Chats</h2>
-      <div id="recentChats"></div>
-      <p id="recentStatus" class="status"></p>
-
-      <h2>Find a User</h2>
-      <input id="search" placeholder="Type username to search">
-      <div id="results"></div>
-      <p id="searchStatus" class="status"></p>
-
-      <h2>Private Chat</h2>
-      <p>Chatting with: <strong id="selectedUser">None selected</strong></p>
-      <div id="messages" aria-live="polite"></div>
-      <div class="row">
-        <input id="messageInput" placeholder="Write a private message..." maxlength="1000">
-        <button id="sendBtn">Send</button>
+      <div class="profile-bar">
+        <img id="myAvatar" class="avatar-img" src="/avatars/avatar-01.svg" alt="My profile picture">
+        <div class="profile-info">
+          <strong id="myName"></strong>
+          <span class="status">My profile</span>
+        </div>
+        <button id="chooseAvatarBtn" class="small-btn" type="button">Avatar</button>
+        <button id="logoutBtn" class="small-btn" type="button">Logout</button>
       </div>
-      <p id="chatStatus" class="status"></p>
+      <div id="avatarPicker" class="hidden" aria-label="Choose profile picture"></div>
+      <div id="chatWorkspace">
+        <div id="discovery">
+          <h2>Recent Chats</h2>
+          <div id="recentChats"></div>
+          <p id="recentStatus" class="status"></p>
+          <h2>Find a User</h2>
+          <input id="search" placeholder="Search username" autocomplete="off">
+          <div id="results"></div>
+          <p id="searchStatus" class="status"></p>
+        </div>
+        <div id="conversation">
+          <div class="conversation-header">
+            <button id="backBtn" class="small-btn" type="button" aria-label="Back">←</button>
+            <img id="peerAvatar" class="avatar-img" src="/avatars/avatar-01.svg" alt="Profile picture">
+            <div class="person">
+              <strong id="selectedUser">Select a chat</strong>
+              <span id="peerStatus" class="status">Private conversation</span>
+            </div>
+            <div class="conversation-actions">
+              <button id="callBtn" type="button" title="Start voice call" aria-label="Start voice call">☎</button>
+            </div>
+          </div>
+          <div id="callPanel" class="hidden">
+            <div id="callStatus">Voice call</div>
+            <button id="acceptCallBtn" class="hidden" type="button">Accept</button>
+            <button id="rejectCallBtn" class="hidden call-danger" type="button">Reject</button>
+            <button id="muteCallBtn" class="hidden" type="button">Mute</button>
+            <button id="endCallBtn" class="hidden call-danger" type="button">Hang up</button>
+            <audio id="remoteAudio" autoplay playsinline></audio>
+          </div>
+          <div id="messages" aria-live="polite"></div>
+          <div class="composer">
+            <input id="messageInput" placeholder="Write a private message..." maxlength="1000" autocomplete="off">
+            <button id="sendBtn" type="button">Send</button>
+          </div>
+          <p id="chatStatus" class="status"></p>
+        </div>
+      </div>
     </section>
   </div>
 
@@ -296,7 +404,7 @@
       }
     }
 
-    function rememberRecentChat(username, preview) {
+    function rememberRecentChat(username, preview, avatarId) {
       if (!currentUsername || !username || username === currentUsername) return;
 
       const chats = getRecentChats();
@@ -304,6 +412,7 @@
 
       const updated = {
         username,
+        avatarId: avatarId || existing?.avatarId || "avatar-01",
         preview: preview !== undefined ? String(preview) : (existing?.preview || "Tap to open chat"),
         time: Date.now()
       };
@@ -319,40 +428,40 @@
       renderRecentChats();
     }
 
+    function avatarUrl(id) {
+      const safe = /^avatar-(0[1-9]|1[0-5])$/.test(id || "") ? id : "avatar-01";
+      return "/avatars/" + safe + ".svg";
+    }
+
     function renderRecentChats() {
       const list = $("recentChats");
       if (!list) return;
-
       list.replaceChildren();
       const chats = getRecentChats();
-
       if (!chats.length) {
         showStatus("recentStatus", "Your recent conversations will appear here.");
         return;
       }
-
       showStatus("recentStatus", "");
-
       chats.forEach(chat => {
         const button = document.createElement("button");
         const avatar = document.createElement("span");
         avatar.className = "recent-avatar";
-        avatar.textContent = chat.username.slice(0, 1).toUpperCase();
-
+        const img = document.createElement("img");
+        img.src = avatarUrl(chat.avatarId);
+        img.alt = "";
+        avatar.appendChild(img);
         const details = document.createElement("span");
         details.className = "recent-details";
-
         const name = document.createElement("span");
         name.className = "recent-name";
         name.textContent = chat.username;
-
         const preview = document.createElement("span");
         preview.className = "recent-preview";
         preview.textContent = chat.preview || "Tap to open chat";
-
         details.append(name, preview);
         button.append(avatar, details);
-        button.addEventListener("click", () => selectUser(chat.username));
+        button.addEventListener("click", () => selectUser(chat.username, chat.avatarId));
         list.appendChild(button);
       });
     }
@@ -395,36 +504,31 @@
     async function enterChat(username) {
       $("auth").classList.add("hidden");
       $("chat").classList.remove("hidden");
+      document.body.classList.add("chat-mode");
       $("myName").textContent = username;
       currentUsername = username;
       showStatus("authStatus", "");
+      try {
+        const profile = await api("/me");
+        $("myAvatar").src = avatarUrl(profile.avatar_id);
+        currentAvatarId = profile.avatar_id || "avatar-01";
+      } catch {}
       renderRecentChats();
-
+      renderAvatarPicker();
       if (socket) socket.disconnect();
-
       socket = io();
-
-      socket.on("connect", () => {
-        showStatus("chatStatus", "Connected. Select a user to start chatting.");
-      });
-
-      socket.on("connect_error", (error) => {
-        showStatus("chatStatus", error.message || "Connection failed.");
-      });
-
-      socket.on("private message", (message) => {
+      socket.on("connect", () => showStatus("chatStatus", "Connected. Select a user to chat."));
+      socket.on("connect_error", error => showStatus("chatStatus", error.message || "Connection failed."));
+      socket.on("private message", message => {
         rememberRecentChat(message.from, message.text);
-        addMessage(message, false);
+        if (message.from === selectedUsername) addMessage(message, false);
       });
-
-      socket.on("private message sent", (message) => {
+      socket.on("private message sent", message => {
         rememberRecentChat(message.to || selectedUsername, message.text);
         addMessage(message, true);
       });
-
-      socket.on("private message error", (message) => {
-        showStatus("chatStatus", message);
-      });
+      socket.on("private message error", message => showStatus("chatStatus", message));
+      setupCallSocketHandlers();
     }
 
     async function searchUsers() {
@@ -446,8 +550,14 @@
         showStatus("searchStatus", "Choose a user:");
         data.users.forEach((username) => {
           const button = document.createElement("button");
-          button.textContent = username.username;
-          button.addEventListener("click", () => selectUser(username.username));
+          const img = document.createElement("img");
+          img.className = "avatar-img";
+          img.src = avatarUrl(username.avatar_id);
+          img.alt = "";
+          const label = document.createElement("span");
+          label.textContent = username.username;
+          button.append(img, label);
+          button.addEventListener("click", () => selectUser(username.username, username.avatar_id));
           $("results").appendChild(button);
         });
       } catch (error) {
@@ -455,22 +565,21 @@
       }
     }
 
-    async function selectUser(username) {
+    async function selectUser(username, avatarId) {
       selectedUsername = username;
-      rememberRecentChat(username);
+      currentPeerAvatarId = avatarId || "avatar-01";
+      rememberRecentChat(username, undefined, currentPeerAvatarId);
       $("selectedUser").textContent = username;
+      $("peerAvatar").src = avatarUrl(currentPeerAvatarId);
       $("messages").replaceChildren();
+      document.body.classList.add("conversation-mode");
+      $("callBtn").disabled = false;
       showStatus("chatStatus", "Loading chat history...");
       $("messageInput").focus();
-
       try {
         const data = await api("/messages?with=" + encodeURIComponent(username));
         if (selectedUsername !== username) return;
-
-        data.messages.forEach((message) => {
-          addMessage(message, message.from === currentUsername);
-        });
-
+        data.messages.forEach(message => addMessage(message, message.from === currentUsername));
         showStatus("chatStatus", "Chat history loaded.");
       } catch (error) {
         showStatus("chatStatus", "Could not load history: " + error.message);
@@ -478,23 +587,18 @@
     }
 
     function addMessage(message, mine) {
-      if (
-        message.from !== selectedUsername &&
-        message.to !== selectedUsername
-      ) {
-        return;
-      }
-
+      if (message.from !== selectedUsername && message.to !== selectedUsername) return;
       const item = document.createElement("div");
       item.className = "message " + (mine ? "mine" : "theirs");
-
       const sender = document.createElement("strong");
       sender.textContent = mine ? "You: " : message.from + ": ";
-
       const text = document.createElement("span");
       text.textContent = message.text;
-
-      item.append(sender, text);
+      const time = document.createElement("span");
+      time.className = "message-time";
+      const date = message.createdAt ? new Date(message.createdAt) : new Date();
+      time.textContent = date.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+      item.append(sender, text, time);
       $("messages").appendChild(item);
       $("messages").scrollTop = $("messages").scrollHeight;
     }
@@ -529,6 +633,9 @@
         await api("/logout", { method: "POST", body: "{}" });
 
         $("chat").classList.add("hidden");
+        document.body.classList.remove("chat-mode", "conversation-mode");
+        $("avatarPicker").classList.add("hidden");
+        stopVoiceCall(false);
         $("auth").classList.remove("hidden");
         $("password").value = "";
         $("messages").replaceChildren();
@@ -541,6 +648,218 @@
         showStatus("chatStatus", error.message);
       }
     }
+
+
+    let currentAvatarId = "avatar-01";
+    let currentPeerAvatarId = "avatar-01";
+    let peerConnection = null;
+    let localStream = null;
+    let activeCall = null;
+    let pendingOffer = null;
+    let isMuted = false;
+    const rtcConfig = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+
+    function renderAvatarPicker() {
+      const picker = $("avatarPicker");
+      picker.replaceChildren();
+      for (let i = 1; i <= 15; i++) {
+        const id = "avatar-" + String(i).padStart(2, "0");
+        const button = document.createElement("button");
+        button.type = "button";
+        button.title = "Choose " + id;
+        const img = document.createElement("img");
+        img.src = avatarUrl(id);
+        img.alt = id;
+        button.appendChild(img);
+        if (id === currentAvatarId) button.style.outline = "2px solid var(--green)";
+        button.addEventListener("click", async () => {
+          try {
+            await api("/profile/avatar", {method:"POST", body:JSON.stringify({avatarId:id})});
+            currentAvatarId = id;
+            $("myAvatar").src = avatarUrl(id);
+            picker.classList.add("hidden");
+            renderAvatarPicker();
+            renderRecentChats();
+            showStatus("chatStatus", "Profile picture saved.");
+          } catch (error) {
+            showStatus("chatStatus", "Could not save avatar: " + error.message);
+          }
+        });
+        picker.appendChild(button);
+      }
+    }
+
+    function showCallPanel(status) {
+      $("callPanel").classList.remove("hidden");
+      $("callStatus").textContent = status;
+    }
+
+    function hideCallPanel() {
+      $("callPanel").classList.add("hidden");
+      ["acceptCallBtn","rejectCallBtn","muteCallBtn","endCallBtn"].forEach(id => $(id).classList.add("hidden"));
+    }
+
+    function closePeerConnection() {
+      if (peerConnection) {
+        peerConnection.onicecandidate = null;
+        peerConnection.ontrack = null;
+        peerConnection.close();
+        peerConnection = null;
+      }
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+      }
+      $("remoteAudio").srcObject = null;
+      isMuted = false;
+      $("muteCallBtn").textContent = "Mute";
+    }
+
+    function stopVoiceCall(notify = true) {
+      if (notify && activeCall && socket && socket.connected) {
+        socket.emit("call:end", {to:activeCall.peer, callId:activeCall.callId});
+      }
+      closePeerConnection();
+      activeCall = null;
+      pendingOffer = null;
+      hideCallPanel();
+    }
+
+    async function preparePeerConnection(peer, callId) {
+      closePeerConnection();
+      localStream = await navigator.mediaDevices.getUserMedia({audio:true, video:false});
+      peerConnection = new RTCPeerConnection(rtcConfig);
+      localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+      peerConnection.ontrack = event => {
+        $("remoteAudio").srcObject = event.streams[0];
+        $("remoteAudio").play().catch(() => {});
+      };
+      peerConnection.onicecandidate = event => {
+        if (event.candidate && socket && socket.connected) {
+          socket.emit("call:ice-candidate", {to:peer, callId, candidate:event.candidate});
+        }
+      };
+      peerConnection.onconnectionstatechange = () => {
+        if (peerConnection && ["failed","disconnected","closed"].includes(peerConnection.connectionState)) {
+          showStatus("callStatus", "Call connection interrupted.");
+        }
+      };
+    }
+
+    async function startVoiceCall() {
+      if (!selectedUsername) {
+        showStatus("chatStatus", "Select a user before calling.");
+        return;
+      }
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        showStatus("chatStatus", "Microphone unavailable. Use HTTPS and allow microphone access.");
+        return;
+      }
+      if (!socket || !socket.connected) {
+        showStatus("chatStatus", "Connect to chat before calling.");
+        return;
+      }
+      if (activeCall) return;
+      const callId = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random());
+      activeCall = {peer:selectedUsername, callId, role:"caller"};
+      showCallPanel("Calling " + selectedUsername + "…");
+      $("endCallBtn").classList.remove("hidden");
+      try {
+        await preparePeerConnection(selectedUsername, callId);
+        const offer = await peerConnection.createOffer();
+        await peerConnection.setLocalDescription(offer);
+        socket.emit("call:offer", {to:selectedUsername, callId, offer:peerConnection.localDescription});
+      } catch (error) {
+        stopVoiceCall(false);
+        showStatus("chatStatus", "Could not start call: " + error.message);
+      }
+    }
+
+    async function acceptIncomingCall() {
+      if (!pendingOffer || !socket) return;
+      const call = pendingOffer;
+      activeCall = {peer:call.from, callId:call.callId, role:"callee"};
+      pendingOffer = null;
+      try {
+        await preparePeerConnection(activeCall.peer, activeCall.callId);
+        await peerConnection.setRemoteDescription(call.offer);
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+        socket.emit("call:answer", {to:activeCall.peer, callId:activeCall.callId, answer:peerConnection.localDescription});
+        $("acceptCallBtn").classList.add("hidden");
+        $("rejectCallBtn").classList.add("hidden");
+        $("muteCallBtn").classList.remove("hidden");
+        $("endCallBtn").classList.remove("hidden");
+        showCallPanel("In call with " + activeCall.peer);
+      } catch (error) {
+        stopVoiceCall(true);
+        showStatus("chatStatus", "Could not accept call: " + error.message);
+      }
+    }
+
+    function setupCallSocketHandlers() {
+      socket.on("call:offer", data => {
+        if (activeCall || pendingOffer || !data.offer) {
+          socket.emit("call:reject", {to:data.from, callId:data.callId});
+          return;
+        }
+        pendingOffer = data;
+        showCallPanel("Incoming voice call from " + data.from);
+        $("acceptCallBtn").classList.remove("hidden");
+        $("rejectCallBtn").classList.remove("hidden");
+        $("acceptCallBtn").onclick = acceptIncomingCall;
+        $("rejectCallBtn").onclick = () => {
+          socket.emit("call:reject", {to:data.from, callId:data.callId});
+          pendingOffer = null;
+          hideCallPanel();
+        };
+      });
+      socket.on("call:answer", async data => {
+        if (!activeCall || data.callId !== activeCall.callId || !data.answer || !peerConnection) return;
+        try {
+          await peerConnection.setRemoteDescription(data.answer);
+          showCallPanel("In call with " + data.from);
+          $("muteCallBtn").classList.remove("hidden");
+          $("endCallBtn").classList.remove("hidden");
+        } catch (error) {
+          showStatus("chatStatus", "Call answer error: " + error.message);
+        }
+      });
+      socket.on("call:ice-candidate", async data => {
+        if (!activeCall || data.callId !== activeCall.callId || !data.candidate || !peerConnection) return;
+        try { await peerConnection.addIceCandidate(data.candidate); }
+        catch (error) { console.warn("ICE candidate error:", error); }
+      });
+      socket.on("call:end", data => {
+        if (activeCall && data.callId === activeCall.callId) {
+          stopVoiceCall(false);
+          showStatus("chatStatus", "Call ended by " + data.from + ".");
+        }
+      });
+      socket.on("call:reject", data => {
+        if (activeCall && data.callId === activeCall.callId) {
+          stopVoiceCall(false);
+          showStatus("chatStatus", data.from + " declined the call.");
+        }
+      });
+      socket.on("call:unavailable", data => {
+        if (activeCall && data.callId === activeCall.callId) {
+          stopVoiceCall(false);
+          showStatus("chatStatus", data.to + " is not online.");
+        }
+      });
+    }
+
+    $("chooseAvatarBtn").addEventListener("click", () => $("avatarPicker").classList.toggle("hidden"));
+    $("backBtn").addEventListener("click", () => document.body.classList.remove("conversation-mode"));
+    $("callBtn").addEventListener("click", startVoiceCall);
+    $("endCallBtn").addEventListener("click", () => stopVoiceCall(true));
+    $("muteCallBtn").addEventListener("click", () => {
+      if (!localStream) return;
+      isMuted = !isMuted;
+      localStream.getAudioTracks().forEach(track => track.enabled = !isMuted);
+      $("muteCallBtn").textContent = isMuted ? "Unmute" : "Mute";
+    });
 
     $("signupBtn").addEventListener("click", () => signupOrLogin("signup"));
     $("loginBtn").addEventListener("click", () => signupOrLogin("login"));
