@@ -202,6 +202,41 @@ app.get("/users", async (req, res) => {
   }
 });
 
+app.get("/recent-chats", async (req, res) => {
+  try {
+    if (!req.session.userId) {
+      return res.status(401).json({ error: "Please login." });
+    }
+
+    const result = await db.query(
+      `WITH latest AS (
+        SELECT DISTINCT ON (other_id)
+          other_id, message_text, created_at, id
+        FROM (
+          SELECT
+            CASE WHEN sender_id = $1 THEN receiver_id ELSE sender_id END AS other_id,
+            message_text, created_at, id
+          FROM messages
+          WHERE sender_id = $1 OR receiver_id = $1
+        ) conversation_messages
+        ORDER BY other_id, id DESC
+      )
+      SELECT u.username, u.avatar_id, l.message_text AS preview,
+             l.created_at AS last_message_at
+      FROM latest l
+      JOIN users u ON u.id = l.other_id
+      ORDER BY l.id DESC
+      LIMIT 50`,
+      [req.session.userId]
+    );
+
+    res.json({ chats: result.rows });
+  } catch (error) {
+    console.error("Recent chats error:", error);
+    res.status(500).json({ error: "Could not load recent chats." });
+  }
+});
+
 app.get("/messages", async (req, res) => {
   try {
     if (!req.session.userId) {

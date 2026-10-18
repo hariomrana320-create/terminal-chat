@@ -433,6 +433,22 @@
       return "/avatars/" + safe + ".svg";
     }
 
+    async function loadRecentChats() {
+      try {
+        const data = await api("/recent-chats");
+        const chats = (data.chats || []).map(chat => ({
+          username: chat.username,
+          avatarId: chat.avatar_id || "avatar-01",
+          preview: chat.preview || "Tap to open chat",
+          time: chat.last_message_at ? new Date(chat.last_message_at).getTime() : Date.now()
+        }));
+        localStorage.setItem(recentStorageKey(), JSON.stringify(chats));
+      } catch (error) {
+        console.warn("Could not load recent chats:", error);
+      }
+      renderRecentChats();
+    }
+
     function renderRecentChats() {
       const list = $("recentChats");
       if (!list) return;
@@ -513,7 +529,7 @@
         $("myAvatar").src = avatarUrl(profile.avatar_id);
         currentAvatarId = profile.avatar_id || "avatar-01";
       } catch {}
-      renderRecentChats();
+      await loadRecentChats();
       renderAvatarPicker();
       if (socket) socket.disconnect();
       socket = io();
